@@ -1,0 +1,22 @@
+name: WOZY-AI
+options:
+  bundleIdPrefix: com.wozy
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  WOZY-AI:
+    type: application
+    platform: iOS
+    sources:
+      - WozyAI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wozy.ai
+        PRODUCT_NAME: WOZY AI
+        INFOPLIST_KEY_CFBundleDisplayName: WOZY AI
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO

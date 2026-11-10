@@ -1,0 +1,39 @@
+
+name: Build WOZY AI IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Build iOS app
+        run: |
+          xcodebuild \
+            -project WOZY-AI.xcodeproj \
+            -scheme WOZY-AI \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Create IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/WOZY-AI.app Payload/
+          zip -r WOZY-AI.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WOZY-AI-IPA
+          path: WOZY-AI.ipa

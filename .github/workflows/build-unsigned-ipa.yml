@@ -1,8 +1,14 @@
-
 name: Build WOZY AI IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ChatView.swift'
+      - 'WozyAIApp.swift'
+      - 'project.yml'
+      - '.github/workflows/build-unsigned-ipa.yml'
 
 jobs:
   build:

@@ -135,7 +135,7 @@ struct ChatView: View {
                         Task { await model.send() }
                     } label: {
                         Image(systemName: "arrow.up")
-                            .font(.bold(18))
+                            .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 46, height: 46)
                             .background(Color.purple)

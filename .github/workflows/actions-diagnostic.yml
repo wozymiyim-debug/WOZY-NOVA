@@ -1,0 +1,18 @@
+name: Actions Runner Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/actions-diagnostic.yml'
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check runner startup
+        run: |
+          echo "GitHub Actions runner started successfully"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Commit: $GITHUB_SHA"

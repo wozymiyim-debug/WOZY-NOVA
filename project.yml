@@ -8,7 +8,8 @@ targets:
     type: application
     platform: iOS
     sources:
-      - WozyAI
+      - ChatView.swift
+      - WozyAIApp.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wozy.ai

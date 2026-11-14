@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
         body: JSON.stringify({
           systemInstruction: {
             parts: [{
-              text: "Sen NEXORA AI adında akıllı bir asistansın. Kullanıcıyla Türkçe konuş; samimi, doğru, açık ve yardımsever ol. Önceki konuşma mesajlarını dikkate al."
+              text: "Sen WOZY adında akıllı bir asistansın. Kullanıcıyla Türkçe konuş; samimi, doğru, açık ve yardımsever ol. Önceki konuşma mesajlarını dikkate al."
             }]
           },
           contents: safeContents

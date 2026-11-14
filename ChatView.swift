@@ -14,19 +14,10 @@ final class ChatModel: ObservableObject {
     ]
     @Published var input = ""
     @Published var isLoading = false
-    @Published var apiKey = UserDefaults.standard.string(forKey: "nexora_gemini_key") ?? ""
-
-    func saveKey() {
-        UserDefaults.standard.set(apiKey, forKey: "nexora_gemini_key")
-    }
 
     func send() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !isLoading else { return }
-        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            messages.append(ChatMessage(text: "Sohbeti başlatmak için üstteki alana Gemini API anahtarını eklemelisin.", isUser: false, isError: true))
-            return
-        }
 
         input = ""
         messages.append(ChatMessage(text: prompt, isUser: true))
@@ -43,84 +34,71 @@ final class ChatModel: ObservableObject {
                         "parts": [["text": message.text]]
                     ] as [String: Any]
                 }
-            let answer = try await GeminiClient.generate(contents: conversation, apiKey: apiKey)
+
+            let answer = try await NexoraClient.generate(contents: conversation)
             messages.append(ChatMessage(text: answer, isUser: false))
         } catch {
-            messages.append(ChatMessage(text: "Bağlantı hatası: \(error.localizedDescription)", isUser: false, isError: true))
+            messages.append(ChatMessage(
+                text: "Bağlantı hatası: \(error.localizedDescription)",
+                isUser: false,
+                isError: true
+            ))
         }
     }
 }
 
-enum GeminiClient {
-    static func generate(contents: [[String: Any]], apiKey: String) async throws -> String {
-        guard let encodedKey = apiKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(encodedKey)") else {
-            throw URLError(.badURL)
-        }
+enum NexoraClient {
+    // Cloudflare Worker kurulduktan sonra bu adres gerçek Worker adresiyle değiştirilecek.
+    private static let endpoint = "https://nexora-ai-api.YOUR-SUBDOMAIN.workers.dev/chat"
 
-        let body: [String: Any] = [
-            "systemInstruction": [
-                "parts": [[
-                    "text": "Sen NEXORA AI adında akıllı bir asistansın. Kullanıcıyla Türkçe konuş; samimi, doğru, açık ve yardımsever ol. Önceki konuşma mesajlarını dikkate al."
-                ]]
-            ],
-            "contents": contents
-        ]
+    static func generate(contents: [[String: Any]]) async throws -> String {
+        guard !endpoint.contains("YOUR-SUBDOMAIN"),
+              let url = URL(string: endpoint) else {
+            throw NSError(
+                domain: "NEXORA",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "NEXORA sunucusu henüz kurulmadı. Bir sonraki adımda sunucu adresini bağlayacağız."]
+            )
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "contents": contents
+        ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        guard (200..<300).contains(http.statusCode) else {
-            let detail = String(data: data, encoding: .utf8) ?? "Bilinmeyen API hatası"
-            throw NSError(domain: "GeminiAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: detail])
+        guard let http = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
         }
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let candidates = json?["candidates"] as? [[String: Any]]
-        let content = candidates?.first?["content"] as? [String: Any]
-        let parts = content?["parts"] as? [[String: Any]]
-        let text = parts?.compactMap { $0["text"] as? String }.joined(separator: "\n")
-        guard let result = text, !result.isEmpty else { throw URLError(.cannotParseResponse) }
-        return result
+        guard (200..<300).contains(http.statusCode) else {
+            let detail = json?["error"] as? String ?? "Sunucu hatası (\(http.statusCode))."
+            throw NSError(
+                domain: "NEXORA",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: detail]
+            )
+        }
+
+        guard let answer = json?["text"] as? String, !answer.isEmpty else {
+            throw URLError(.cannotParseResponse)
+        }
+        return answer
     }
 }
 
 struct ChatView: View {
     @StateObject private var model = ChatModel()
-    @State private var showKey = false
 
     var body: some View {
         ZStack {
             Color(red: 0.035, green: 0.035, blue: 0.07).ignoresSafeArea()
             VStack(spacing: 0) {
                 header
-
-                HStack(spacing: 8) {
-                    Group {
-                        if showKey {
-                            TextField("Gemini API anahtarın", text: $model.apiKey)
-                        } else {
-                            SecureField("Gemini API anahtarın", text: $model.apiKey)
-                        }
-                    }
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-
-                    Button(showKey ? "Gizle" : "Göster") { showKey.toggle() }
-                        .font(.caption.bold())
-                        .foregroundColor(.purple)
-                }
-                .padding(12)
-                .background(Color.white.opacity(0.07))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .padding(.horizontal)
-                .padding(.top, 10)
-                .onChange(of: model.apiKey) { _ in model.saveKey() }
 
                 ScrollViewReader { proxy in
                     ScrollView {

@@ -10,7 +10,7 @@ struct ChatMessage: Identifiable {
 @MainActor
 final class ChatModel: ObservableObject {
     @Published var messages: [ChatMessage] = [
-        ChatMessage(text: "Merhaba! Ben NEXORA AI. Sana nasıl yardımcı olabilirim? 🤖", isUser: false)
+        ChatMessage(text: "Merhaba! Ben WOZY. Sana nasıl yardımcı olabilirim? 🤖", isUser: false)
     ]
     @Published var input = ""
     @Published var isLoading = false
@@ -48,8 +48,8 @@ final class ChatModel: ObservableObject {
 }
 
 enum NexoraClient {
-    // Cloudflare Worker kurulduktan sonra bu adres gerçek Worker adresiyle değiştirilecek.
-    private static let endpoint = "https://nexora-ai-api.YOUR-SUBDOMAIN.workers.dev/chat"
+    // WOZY Vercel API
+    private static let endpoint = "https://wozy-wpzy1.vercel.app/api/chat"
 
     static func generate(contents: [[String: Any]]) async throws -> String {
         guard !endpoint.contains("YOUR-SUBDOMAIN"),
@@ -57,7 +57,7 @@ enum NexoraClient {
             throw NSError(
                 domain: "NEXORA",
                 code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "NEXORA sunucusu henüz kurulmadı. Bir sonraki adımda sunucu adresini bağlayacağız."]
+                userInfo: [NSLocalizedDescriptionKey: "WOZY sunucusuna şu anda bağlanılamıyor."]
             )
         }
 
@@ -122,7 +122,7 @@ struct ChatView: View {
                             if model.isLoading {
                                 HStack {
                                     ProgressView().tint(.purple)
-                                    Text("NEXORA AI düşünüyor…").foregroundColor(.gray)
+                                    Text("WOZY düşünüyor…").foregroundColor(.gray)
                                     Spacer()
                                 }
                             }
@@ -174,7 +174,7 @@ struct ChatView: View {
             .frame(width: 45, height: 45)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("NEXORA AI").font(.title2.bold()).foregroundColor(.white)
+                Text("WOZY").font(.title2.bold()).foregroundColor(.white)
                 Text("Akıllı asistanın").font(.caption).foregroundColor(.gray)
             }
 

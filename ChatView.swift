@@ -4,63 +4,82 @@ struct ChatMessage: Identifiable {
     let id = UUID()
     let text: String
     let isUser: Bool
+    var isError = false
 }
 
 @MainActor
 final class ChatModel: ObservableObject {
     @Published var messages: [ChatMessage] = [
-        ChatMessage(text: "Merhaba Wozy! Ben WOZY AI. Sana nasıl yardımcı olabilirim? 🤖", isUser: false)
+        ChatMessage(text: "Merhaba! Ben NEXORA AI. Sana nasıl yardımcı olabilirim? 🤖", isUser: false)
     ]
     @Published var input = ""
     @Published var isLoading = false
-    @Published var apiKey = UserDefaults.standard.string(forKey: "wozy_gemini_key") ?? ""
+    @Published var apiKey = UserDefaults.standard.string(forKey: "nexora_gemini_key") ?? ""
 
     func saveKey() {
-        UserDefaults.standard.set(apiKey, forKey: "wozy_gemini_key")
+        UserDefaults.standard.set(apiKey, forKey: "nexora_gemini_key")
     }
 
     func send() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !isLoading else { return }
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            messages.append(ChatMessage(text: "Önce üstteki API anahtarı alanına Gemini API anahtarını gir.", isUser: false))
+            messages.append(ChatMessage(text: "Sohbeti başlatmak için üstteki alana Gemini API anahtarını eklemelisin.", isUser: false, isError: true))
             return
         }
+
         input = ""
         messages.append(ChatMessage(text: prompt, isUser: true))
         isLoading = true
         defer { isLoading = false }
 
         do {
-            let answer = try await GeminiClient.generate(prompt: prompt, apiKey: apiKey)
+            let conversation = messages
+                .filter { !$0.isError }
+                .suffix(20)
+                .map { message in
+                    [
+                        "role": message.isUser ? "user" : "model",
+                        "parts": [["text": message.text]]
+                    ] as [String: Any]
+                }
+            let answer = try await GeminiClient.generate(contents: conversation, apiKey: apiKey)
             messages.append(ChatMessage(text: answer, isUser: false))
         } catch {
-            messages.append(ChatMessage(text: "Bağlantı hatası: \(error.localizedDescription)", isUser: false))
+            messages.append(ChatMessage(text: "Bağlantı hatası: \(error.localizedDescription)", isUser: false, isError: true))
         }
     }
 }
 
 enum GeminiClient {
-    static func generate(prompt: String, apiKey: String) async throws -> String {
+    static func generate(contents: [[String: Any]], apiKey: String) async throws -> String {
         guard let encodedKey = apiKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(encodedKey)") else {
             throw URLError(.badURL)
         }
 
         let body: [String: Any] = [
-            "systemInstruction": ["parts": [["text": "Sen WOZY AI adında akıllı bir asistansın. Türkçe konuş. Samimi, zeki ve yardımsever ol. Kullanıcının adı Wozy. Soruları doğru ve anlaşılır cevapla."]]],
-            "contents": [["role": "user", "parts": [["text": prompt]]]]
+            "systemInstruction": [
+                "parts": [[
+                    "text": "Sen NEXORA AI adında akıllı bir asistansın. Kullanıcıyla Türkçe konuş; samimi, doğru, açık ve yardımsever ol. Önceki konuşma mesajlarını dikkate al."
+                ]]
+            ],
+            "contents": contents
         ]
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(http.statusCode) else {
             let detail = String(data: data, encoding: .utf8) ?? "Bilinmeyen API hatası"
             throw NSError(domain: "GeminiAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: detail])
         }
+
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let candidates = json?["candidates"] as? [[String: Any]]
         let content = candidates?.first?["content"] as? [String: Any]
@@ -80,15 +99,21 @@ struct ChatView: View {
             Color(red: 0.035, green: 0.035, blue: 0.07).ignoresSafeArea()
             VStack(spacing: 0) {
                 header
+
                 HStack(spacing: 8) {
                     Group {
-                        if showKey { TextField("Gemini API anahtarın", text: $model.apiKey) }
-                        else { SecureField("Gemini API anahtarın", text: $model.apiKey) }
+                        if showKey {
+                            TextField("Gemini API anahtarın", text: $model.apiKey)
+                        } else {
+                            SecureField("Gemini API anahtarın", text: $model.apiKey)
+                        }
                     }
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+
                     Button(showKey ? "Gizle" : "Göster") { showKey.toggle() }
-                        .font(.caption.bold()).foregroundColor(.purple)
+                        .font(.caption.bold())
+                        .foregroundColor(.purple)
                 }
                 .padding(12)
                 .background(Color.white.opacity(0.07))
@@ -103,24 +128,33 @@ struct ChatView: View {
                             ForEach(model.messages) { message in
                                 HStack {
                                     if message.isUser { Spacer(minLength: 45) }
+
                                     Text(message.text)
                                         .font(.system(size: 15))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(message.isError ? .orange : .white)
                                         .padding(13)
                                         .background(message.isUser ? Color.purple : Color.white.opacity(0.10))
                                         .clipShape(RoundedRectangle(cornerRadius: 17))
+
                                     if !message.isUser { Spacer(minLength: 45) }
                                 }
                                 .id(message.id)
                             }
+
                             if model.isLoading {
-                                HStack { ProgressView().tint(.purple); Text("WOZY AI düşünüyor…").foregroundColor(.gray); Spacer() }
+                                HStack {
+                                    ProgressView().tint(.purple)
+                                    Text("NEXORA AI düşünüyor…").foregroundColor(.gray)
+                                    Spacer()
+                                }
                             }
                         }
                         .padding()
                     }
                     .onChange(of: model.messages.count) { _ in
-                        if let last = model.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                        if let last = model.messages.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
                     }
                 }
 
@@ -131,6 +165,7 @@ struct ChatView: View {
                         .background(Color.white.opacity(0.09))
                         .clipShape(RoundedRectangle(cornerRadius: 18))
                         .foregroundColor(.white)
+
                     Button {
                         Task { await model.send() }
                     } label: {
@@ -152,14 +187,19 @@ struct ChatView: View {
     private var header: some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14).fill(LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: "sparkles").font(.title2.bold()).foregroundColor(.white)
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Image(systemName: "sparkles")
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
             }
             .frame(width: 45, height: 45)
+
             VStack(alignment: .leading, spacing: 2) {
-                Text("WOZY AI").font(.title2.bold()).foregroundColor(.white)
+                Text("NEXORA AI").font(.title2.bold()).foregroundColor(.white)
                 Text("Akıllı asistanın").font(.caption).foregroundColor(.gray)
             }
+
             Spacer()
             Circle().fill(Color.green).frame(width: 8, height: 8)
             Text("Çevrimiçi").font(.caption).foregroundColor(.gray)
